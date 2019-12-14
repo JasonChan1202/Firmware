@@ -344,7 +344,7 @@ void receive_start(pthread_t *thread)
     param.sched_priority = SCHED_PRIORITY_MAX - 80;
     (void)pthread_attr_setschedparam(&receiveloop_attr, &param);
 
-    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(4000));
+    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(6000));
     pthread_create(thread, &receiveloop_attr, receive_loop, NULL);
 
     pthread_attr_destroy(&receiveloop_attr);

@@ -207,8 +207,11 @@ private:
 	gps_dump_s			*_dump_to_device{nullptr};
 	gps_dump_s			*_dump_from_device{nullptr};
 
-	static volatile bool _is_gps_main_advertised; ///< for the second gps we want to make sure that it gets instance 1
+	//static volatile bool _is_gps_main_advertised; ///< for the second gps we want to make sure that it gets instance 1
 	/// and thus we wait until the first one publishes at least one message.
+
+	static bool _have_rtk_device;
+	bool _is_rtk_device;
 
 	static volatile GPS *_secondary_instance;
 
@@ -271,7 +274,8 @@ private:
 	void initializeCommunicationDump();
 };
 
-volatile bool GPS::_is_gps_main_advertised = false;
+//volatile bool GPS::_is_gps_main_advertised = false;
+bool GPS::_have_rtk_device = false;
 volatile GPS *GPS::_secondary_instance = nullptr;
 
 /*
@@ -963,14 +967,29 @@ GPS::reset_if_scheduled()
 void
 GPS::publish()
 {
-	if (_instance == Instance::Main || _instance == Instance::Secondary || _is_gps_main_advertised) {
+	if (_have_rtk_device) {
+		if (_is_rtk_device) {
+			if (_report_gps_pos.fix_type < 4) {
+				_have_rtk_device = false;
+				_is_rtk_device = false;
+			}
+			orb_publish_auto(ORB_ID(vehicle_gps_position), &_report_gps_pos_pub, &_report_gps_pos, 
+					 &_gps_orb_instance, ORB_PRIO_DEFAULT);
+		} else {
+			//do not publish gps message if there have rtk device
+		}
+	} else {
+		if (_report_gps_pos.fix_type == 5 || _report_gps_pos.fix_type == 6) {
+			_have_rtk_device = true;
+			_is_rtk_device = true;
+		}
+
 		orb_publish_auto(ORB_ID(vehicle_gps_position), &_report_gps_pos_pub, &_report_gps_pos, &_gps_orb_instance,
 				 ORB_PRIO_DEFAULT);
-		// Heading/yaw data can be updated at a lower rate than the other navigation data.
-		// The uORB message definition requires this data to be set to a NAN if no new valid data is available.
-		_report_gps_pos.heading = NAN;
-		_is_gps_main_advertised = true;
 	}
+	// Heading/yaw data can be updated at a lower rate than the other navigation data.
+	// The uORB message definition requires this data to be set to a NAN if no new valid data is available.
+	_report_gps_pos.heading = NAN;
 }
 
 void
