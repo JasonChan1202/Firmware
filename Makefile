@@ -155,6 +155,7 @@ define cmake-build
 		|| (rm -rf $(BUILD_DIR)); \
 	fi
 	@# run the build for the specified target
+	@rm -rf "$(SRC_DIR)"/build/px4_fmu-v5_default/src/modules/rw_uart
 	@cmake --build $(BUILD_DIR) -- $(PX4_MAKE_ARGS) $(ARGS)
 endef
 

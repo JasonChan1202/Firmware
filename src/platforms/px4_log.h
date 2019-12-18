@@ -35,7 +35,7 @@
  * @file px4_log.h
  * Platform dependant logging/debug implementation
  */
-#include "debug.h"
+//#include "debug.h"
 #pragma once
 
 #define _PX4_LOG_LEVEL_DEBUG		0
