@@ -919,8 +919,10 @@ HMC5883::collect()
 	 * to align the sensor axes with the board, x and y need to be flipped
 	 * and y needs to be negated
 	 */
-	new_report.x_raw = -report.y;
-	new_report.y_raw = report.x;
+	//new_report.x_raw = -report.y;
+	//new_report.y_raw = report.x;
+	new_report.x_raw = report.x;
+	new_report.y_raw = report.y;
 	/* z remains z */
 	new_report.z_raw = report.z;
 
@@ -941,8 +943,10 @@ HMC5883::collect()
 	/* the standard external mag by 3DR has x pointing to the
 	 * right, y pointing backwards, and z down, therefore switch x
 	 * and y and invert y */
-	xraw_f = -report.y;
-	yraw_f = report.x;
+	//xraw_f = -report.y;
+	//yraw_f = report.x;
+	xraw_f = report.x;
+	yraw_f = report.y;
 	zraw_f = report.z;
 
 	// apply user specified rotation
