@@ -508,7 +508,7 @@ Sensors::adc_poll()
 				if (ADC1_SPARE_1_CHANNEL == buf_adc[i].am_channel) { //dg voltage
 
 					/* calculate dg voltage */
-					const float dg_voltage_power = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.76f);
+					const float dg_voltage_power = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.760f);
 					dg_voltage_power_temp = dg_voltage_power;
 					if (!_dg_voltage_power_initialized) {
 						_dg_voltage_power_filtered_v = dg_voltage_power;
@@ -523,7 +523,7 @@ Sensors::adc_poll()
 				else if (ADC1_SPARE_2_CHANNEL == buf_adc[i].am_channel) {  // dg battery voltage
 
 					/* calculate dg battery voltage */
-					const float dg_voltage_battery = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.80f);
+					const float dg_voltage_battery = (float)(buf_adc[i].am_data * _parameters.battery_voltage_scaling * _parameters.battery_v_div * 1.815f);
 					dg_voltage_battery_temp = dg_voltage_battery;
 					if (!_dg_voltage_battery_initialized) {
 						_dg_voltage_battery_filtered_v = dg_voltage_battery;
