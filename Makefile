@@ -211,7 +211,7 @@ endef
 
 # use px4_fmu-%_default to replace px4fmu-%_default
 px4fmu-%_default:
-	$(call deprecation_warning, ${@},$(subst px4fmu,px4_fmu,$@))
+	$(call deprecation_warning, ${@},$(subst px4fmu,px4_fmu,$@)
 	$(MAKE) $(subst px4fmu,px4_fmu, $@)
 
 posix_sitl_default:

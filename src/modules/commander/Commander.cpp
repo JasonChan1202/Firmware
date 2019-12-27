@@ -101,6 +101,7 @@
 #include <uORB/topics/vtol_vehicle_status.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/virtual_stick.h>
+#include <uORB/topics/dg_voltage.h>
 
 typedef enum VEHICLE_MODE_FLAG {
         VEHICLE_MODE_FLAG_CUSTOM_MODE_ENABLED = 1, /* 0b00000001 Reserved for future use. | */
@@ -180,6 +181,8 @@ static struct vehicle_land_detected_s land_detector = {};
 static float _eph_threshold_adj =
         INFINITY;	///< maximum allowable horizontal position uncertainty after adjustment for flight condition
 static bool _skip_pos_accuracy_check = false;
+
+static bool rc_signal_lost_pre = false;
 
 /**
  * The daemon app only briefly exists to start
@@ -568,6 +571,7 @@ Commander::Commander() :
         _auto_disarm_landed.set_hysteresis_time_from(false, 10_s);
         _auto_disarm_killed.set_hysteresis_time_from(false, 5_s);
         _battery_sub = orb_subscribe(ORB_ID(battery_status));
+        _battery_sub_dg = orb_subscribe(ORB_ID(dg_voltage));
 
 
         _telemetry_status_sub = orb_subscribe(ORB_ID(telemetry_status));
@@ -598,6 +602,7 @@ Commander::Commander() :
 Commander::~Commander()
 {
         orb_unsubscribe(_battery_sub);
+        orb_unsubscribe(_battery_sub_dg);
         orb_unsubscribe(_telemetry_status_sub);
 
 
@@ -1796,7 +1801,7 @@ Commander::run()
                         orb_copy(ORB_ID(cpuload), cpuload_sub, &cpuload);
                 }
 
-        battery_status_check(status_changed);
+                battery_status_check(status_changed);
 
                 /* update subsystem info which arrives from outside of commander*/
                 do {
@@ -1956,6 +1961,7 @@ Commander::run()
                         // transition to previous state if sticks are touched
                         if ((_last_sp_man.timestamp != sp_man.timestamp) &&
                             (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
                             ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
                              (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
                              (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
@@ -1979,6 +1985,7 @@ Commander::run()
 
                         if ((_last_sp_man.timestamp != sp_man.timestamp) &&
                             (_last_sp_man.mode_slot == sp_man.mode_slot) &&
+                            (rc_signal_lost_pre == status.rc_signal_lost) &&
                             ((fabsf(sp_man.x - _last_sp_man.x) > min_stick_change) ||
                              (fabsf(sp_man.y - _last_sp_man.y) > min_stick_change) ||
                              (fabsf(sp_man.z - _last_sp_man.z) > min_stick_change) ||
@@ -1990,7 +1997,6 @@ Commander::run()
                                 status_changed =true;
                         }
                 }
-
 
                 /* Check for mission flight termination */
                 if (armed.armed && _mission_result_sub.get().flight_termination &&
@@ -2011,6 +2017,9 @@ Commander::run()
                 }
 
                 /* RC input check */
+
+                if (status_flags.rc_signal_found_once) rc_signal_lost_pre = status.rc_signal_lost;
+
                 if (!status_flags.rc_input_blocked && sp_man.timestamp != 0 &&
                     (hrt_elapsed_time(&sp_man.timestamp) < (_param_com_rc_loss_t.get() * 1_s))) {
 
@@ -2184,7 +2193,7 @@ Commander::run()
                         /* no else case: do not change lockdown flag in unconfigured case */
 
                 } else {
-            if (!status_flags.rc_input_blocked && !status.rc_signal_lost) {
+                        if (!status_flags.rc_input_blocked && !status.rc_signal_lost) {
                                 mavlink_log_critical(&mavlink_log_pub, "Manual control lost");
                                 status.rc_signal_lost = true;
                                 rc_signal_lost_timestamp = sp_man.timestamp;
@@ -2261,16 +2270,37 @@ Commander::run()
                 }
 
                 /* check if we are disarmed and there is a better mode to wait in */
-                if (!armed.armed) {
+                //if (!armed.armed)
+                {
 
                         /* if there is no radio control but GPS lock the user might want to fly using
                          * just a tablet. Since the RC will force its mode switch setting on connecting
                          * we can as well just wait in a hold mode which enables tablet control.
                          */
-                        if (status.rc_signal_lost && (internal_state.main_state == commander_state_s::MAIN_STATE_MANUAL)
-                            && status_flags.condition_home_position_valid) {
-
-                                main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_RTL, status_flags, &internal_state);
+                        if (status.rc_signal_lost
+                            //&& (internal_state.main_state == commander_state_s::MAIN_STATE_MANUAL)
+                            && status_flags.condition_home_position_valid) {                                
+                                //main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_RTL, status_flags, &internal_state);
+                                //if (_param_nav_rcl_act.get() >0)
+                                {
+                                    uint8_t rc_failsafe_act_disarm = 0;
+                                   switch (_param_nav_rcl_act.get()) {
+//                                   case 1:
+//                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LOITER;
+//                                       break;
+                                   case 2:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_RTL;
+                                       break;
+                                   case 3:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LAND;
+                                       break;
+                                   default:
+                                       rc_failsafe_act_disarm = commander_state_s::MAIN_STATE_AUTO_LOITER;
+                                       break;
+                                   }
+                                    main_state_transition(status, rc_failsafe_act_disarm, status_flags, &internal_state);
+                                    //status_changed = true;
+                               }
                         }
                 }
 
@@ -2375,7 +2405,7 @@ Commander::run()
                 was_armed = armed.armed;
 
                 /* now set navigation state according to failsafe and main state */
-                bool nav_state_changed = set_nav_state(&status,
+                 bool  nav_state_changed = set_nav_state(&status,
                                                        &armed,
                                                        &internal_state,
                                                        &mavlink_log_pub,
@@ -2588,7 +2618,24 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 
     uint instance = 0;
     uORB::Subscription<vehicle_gps_position_s> gps{ORB_ID(vehicle_gps_position), 0, instance};
-    bool gps_valid = hrt_absolute_time()< 50_s || (hrt_elapsed_time(&gps.get().timestamp) < 5_s);
+    instance =1;
+    uORB::Subscription<vehicle_gps_position_s> gps2{ORB_ID(vehicle_gps_position), 0, instance};
+
+    bool gps1_valid = (hrt_elapsed_time(&gps.get().timestamp) < 5_s);
+    if (!gps1_valid){
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS1, false, false, status);
+    }else {
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS1, true, true, status);
+    }
+    bool gps2_valid = (hrt_elapsed_time(&gps2.get().timestamp) < 5_s);
+    if (!gps2_valid){
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS2, false, false, status);
+    } else {
+        set_health_flags_present_healthy(subsystem_info_s::SUBSYSTEM_TYPE_GPS2, true, true, status);
+    }
+
+    bool gps_valid = hrt_absolute_time()< 50_s || gps1_valid || gps2_valid;
+
     if (gps_valid != pre_gps_valid) {
         changed = true;
         pre_gps_valid = gps_valid;
@@ -2673,9 +2720,10 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 
         if (set_normal_color) {
             /* set color */
-            if (status.failsafe) {
-                led_color = led_control_s::COLOR_PURPLE;
-            } else if (status_local->arming_state == vehicle_status_s::ARMING_STATE_INIT) {
+//            if (status.failsafe) {
+//                led_color = led_control_s::COLOR_PURPLE;
+//            } else
+            if (status_local->arming_state == vehicle_status_s::ARMING_STATE_INIT) {
             // if in init status it should not be in the error state
                 led_mode = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_YELLOW;
@@ -2704,7 +2752,7 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                 led_mode  = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_YELLOW;
             } else if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_MANUAL){
-                if (status_flags.condition_global_position_valid && status_flags.condition_local_position_valid ) {
+                if (status_flags.condition_global_position_valid && status_flags.condition_local_position_valid) {
                       led_mode = (led_control_s::MODE_FLASH)|((led_control_s::COLOR_YELLOW)<<4);
                       led_color = led_control_s::COLOR_YELLOW;
                       led_color|= (led_control_s::COLOR_GREEN)<<4;
@@ -2713,7 +2761,10 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                     led_mode  = led_control_s::MODE_BLINK_NORMAL;
                     led_color = led_control_s::COLOR_YELLOW;
                 }
-            }else if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_ALTCTL || status.nav_state==vehicle_status_s::NAVIGATION_STATE_STAB ){
+            }else if (status.nav_state==vehicle_status_s::NAVIGATION_STATE_ALTCTL ||
+                       status.nav_state==vehicle_status_s::NAVIGATION_STATE_STAB ||
+                       (status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL &&
+                        (!status_flags.condition_global_position_valid || !status_flags.condition_local_position_valid))){
                 led_mode = (led_control_s::MODE_FLASH)|((led_control_s::COLOR_GREEN)<<4);
                 led_color = led_control_s::COLOR_GREEN;
                 led_color|= (led_control_s::COLOR_YELLOW)<<4;
@@ -2726,7 +2777,8 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                      sp_man.mode_slot ==manual_control_setpoint_s::MODE_SLOT_4){
                 led_mode  = led_control_s::MODE_BLINK_FAST;
                 led_color = led_control_s::COLOR_BLUE;
-            }else if(status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_RTL){
+            }else if(status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_RTL ||
+                       status.nav_state==vehicle_status_s::vehicle_status_s::NAVIGATION_STATE_AUTO_LAND ){
                 led_mode  = led_control_s::MODE_ON;
                 led_color = led_control_s::COLOR_RED;
             /*}else if(status.data_link_lost){
@@ -2735,14 +2787,14 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
                  led_color|= (led_control_s::COLOR_BLUE)<<4;
                  led_color|= 1<<7;*/
             }else{
-                if(status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL && sp_man.virtual_stick_enable){
+                if (status.nav_state==vehicle_status_s::NAVIGATION_STATE_POSCTL && sp_man.virtual_stick_enable){
                     led_mode = led_control_s::MODE_BLINK_NORMAL;
                     led_color = led_control_s::COLOR_BLUE;
                     led_color|= (led_control_s::COLOR_GREEN)<<4;
                     led_color|= 1<<7;
-            }else{
-                  led_mode  = led_control_s::MODE_BLINK_NORMAL;
-                  led_color = led_control_s::COLOR_GREEN;
+                }else{
+                   led_mode  = led_control_s::MODE_BLINK_NORMAL;
+                   led_color = led_control_s::COLOR_GREEN;
                 }
             }
 
@@ -2812,12 +2864,53 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 transition_result_t
 Commander::set_main_state(const vehicle_status_s &status_local, bool *changed)
 {
+    //if (rc_signal_lost_pre == status.rc_signal_lost)
+    if (rc_signal_lost_pre == true && status.rc_signal_lost == false){
+            _last_sp_man = sp_man;
+            uint8_t rc_failsafe_act_regain = 0;
+            switch (_param_nav_rcl_act.get()) {
+                case 2:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
+                    break;
+                case 3:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
+                    break;
+                default:
+                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
+                    break;
+            }
+            main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
+            *changed = true;
+            return TRANSITION_CHANGED;
+        }
+    else {
         if (safety.override_available && safety.override_enabled) {
                 return set_main_state_override_on(status_local, changed);
 
         } else {
                 return set_main_state_rc(status_local, changed);
         }
+    }
+//    else {
+//        _last_sp_man = sp_man;
+//        if (rc_signal_lost_pre == true && status.rc_signal_lost == false){
+//            _last_sp_man = sp_man;
+//            uint8_t rc_failsafe_act_regain = 0;
+//            switch (_param_nav_rcl_act.get()) {
+//                case 2:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_RTL;
+//                    break;
+//                case 3:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LAND;
+//                    break;
+//                default:
+//                    rc_failsafe_act_regain = commander_state_s::MAIN_STATE_AUTO_LOITER;
+//                    break;
+//            }
+//        main_state_transition(status, rc_failsafe_act_regain, status_flags, &internal_state);
+//        }
+//        return TRANSITION_CHANGED;
+//    }
 }
 
 transition_result_t
@@ -2887,9 +2980,11 @@ Commander::set_main_state_rc(const vehicle_status_s &status_local, bool *changed
 
                 /* no timestamp change or no switch change -> nothing changed */
                 return TRANSITION_NOT_CHANGED;
+
         }
 
         _last_sp_man = sp_man;
+        //mavlink_log_info(&mavlink_log_pub, "should_evaluate_rc_mode_switch is %d", should_evaluate_rc_mode_switch);
 
         // reset the position and velocity validity calculation to give the best change of being able to select
         // the desired mode
@@ -3334,6 +3429,7 @@ set_control_mode()
 
         switch (status.nav_state) {
         case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+        case vehicle_status_s::NAVIGATION_STATE_STAB:
                 control_mode.flag_control_manual_enabled = true;
                 control_mode.flag_control_auto_enabled = false;
                 control_mode.flag_control_rates_enabled = stabilization_required();
@@ -3345,21 +3441,22 @@ set_control_mode()
                 control_mode.flag_control_velocity_enabled = false;
                 control_mode.flag_control_acceleration_enabled = false;
                 control_mode.flag_control_termination_enabled = false;
+                status.nav_state = vehicle_status_s::NAVIGATION_STATE_MANUAL;
                 break;
 
-        case vehicle_status_s::NAVIGATION_STATE_STAB:
-                control_mode.flag_control_manual_enabled = true;
-                control_mode.flag_control_auto_enabled = false;
-                control_mode.flag_control_rates_enabled = true;
-                control_mode.flag_control_attitude_enabled = true;
-                control_mode.flag_control_rattitude_enabled = false;
-                control_mode.flag_control_altitude_enabled = false;
-                control_mode.flag_control_climb_rate_enabled = false;
-                control_mode.flag_control_position_enabled = false;
-                control_mode.flag_control_velocity_enabled = false;
-                control_mode.flag_control_acceleration_enabled = false;
-                control_mode.flag_control_termination_enabled = false;
-                break;
+//        case vehicle_status_s::NAVIGATION_STATE_STAB:
+//                control_mode.flag_control_manual_enabled = true;
+//                control_mode.flag_control_auto_enabled = false;
+//                control_mode.flag_control_rates_enabled = true;
+//                control_mode.flag_control_attitude_enabled = true;
+//                control_mode.flag_control_rattitude_enabled = false;
+//                control_mode.flag_control_altitude_enabled = false;
+//                control_mode.flag_control_climb_rate_enabled = false;
+//                control_mode.flag_control_position_enabled = false;
+//                control_mode.flag_control_velocity_enabled = false;
+//                control_mode.flag_control_acceleration_enabled = false;
+//                control_mode.flag_control_termination_enabled = false;
+//                break;
 
 //	case vehicle_status_s::NAVIGATION_STATE_RATTITUDE:
 //		control_mode.flag_control_manual_enabled = true;
@@ -4182,16 +4279,15 @@ void Commander::battery_status_check(bool &status_changed)
     bool updated = false;
 
     /* update battery status */
-    orb_check(_battery_sub, &updated);
+    orb_check(_battery_sub_dg, &updated);
 
     if (updated) {
 
-        battery_status_s battery = {};
+        dg_voltage_s battery = {};
 
-        if (orb_copy(ORB_ID(battery_status), _battery_sub, &battery) == PX4_OK) {
+        if (orb_copy(ORB_ID(dg_voltage), _battery_sub_dg, &battery) == PX4_OK) {
 
             if ((hrt_elapsed_time(&battery.timestamp) < 5_s)
-                && battery.connected
                 && (_battery_warning == battery_status_s::BATTERY_WARNING_NONE)) {
 
                 status_flags.condition_battery_healthy = true;
@@ -4234,9 +4330,64 @@ void Commander::battery_status_check(bool &status_changed)
             if(_battery_warning != battery.warning)
                 status_changed=true;
             _battery_warning = battery.warning;
-            _battery_current = battery.current_filtered_a;
+            _battery_current = 5.0f;
         }
     }
+
+//    if (updated) {
+
+//        battery_status_s battery = {};
+
+//        if (orb_copy(ORB_ID(battery_status), _battery_sub, &battery) == PX4_OK) {
+
+//            if ((hrt_elapsed_time(&battery.timestamp) < 5_s)
+//                && battery.connected
+//                && (_battery_warning == battery_status_s::BATTERY_WARNING_NONE)) {
+
+//                status_flags.condition_battery_healthy = true;
+
+//            } else {
+//                status_flags.condition_battery_healthy = false;
+//            }
+
+//            // execute battery failsafe if the state has gotten worse
+//            if (armed.armed) {
+//                if (battery.warning > _battery_warning)
+//                //if (battery.warning > 0)
+//                {
+//                    battery_failsafe(&mavlink_log_pub, status, status_flags, &internal_state, battery.warning,
+//                             (low_battery_action_t)_param_com_low_bat_act.get());
+//                }
+//            }
+
+//            // Handle shutdown request from emergency battery action
+//            if (!armed.armed && (battery.warning != _battery_warning))
+//            //if (!armed.armed && (battery.warning != 0))
+//            {
+
+//                if (battery.warning == battery_status_s::BATTERY_WARNING_EMERGENCY) {
+//                    mavlink_log_critical(&mavlink_log_pub, "Dangerously low battery! Shutting system down");
+//                    px4_usleep(200000);
+
+//                    int ret_val = px4_shutdown_request(false, false);
+
+//                    if (ret_val) {
+//                        mavlink_log_critical(&mavlink_log_pub, "System does not support shutdown");
+
+//                    } else {
+//                        while (1) { px4_usleep(1); }
+//                    }
+//                }
+//            }
+
+//            // save last value
+//            if(_battery_warning != battery.warning)
+//                status_changed=true;
+//            _battery_warning = battery.warning;
+//            _battery_current = battery.current_filtered_a;
+//        }
+//    }
+
 }
 
 void Commander::airspeed_use_check()
