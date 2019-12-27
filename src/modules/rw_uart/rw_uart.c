@@ -135,6 +135,7 @@ void msg_orb_sub (void)
     msg_fd.global_position_fd = orb_subscribe(ORB_ID(vehicle_global_position));
     msg_fd.attitude_sp_fd = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
     msg_fd.home_position_fd = orb_subscribe(ORB_ID(home_position));
+    msg_fd.dg_voltage_fd = orb_subscribe(ORB_ID(dg_voltage));
 }
 
 
@@ -157,6 +158,7 @@ void msg_orb_data(void)
    orb_copy(ORB_ID(vehicle_global_position), msg_fd.global_position_fd, &msg_data.global_position_data);
    orb_copy(ORB_ID(vehicle_attitude_setpoint), msg_fd.attitude_sp_fd, &msg_data.attitude_sp_data);
    orb_copy(ORB_ID(home_position), msg_fd.home_position_fd, &msg_data.home_position_data);
+   orb_copy(ORB_ID(dg_voltage), msg_fd.dg_voltage_fd, &msg_data.dg_voltage_data);
 }
 
 void msg_orb_unsub (void)
@@ -178,6 +180,7 @@ void msg_orb_unsub (void)
     orb_unsubscribe(msg_fd.global_position_fd);
     orb_unsubscribe(msg_fd.attitude_sp_fd);
     orb_unsubscribe(msg_fd.home_position_fd);
+    orb_unsubscribe(msg_fd.dg_voltage_fd);
 }
 
 void msg_param_hd_cache (void)
@@ -385,9 +388,9 @@ int rw_uart_thread_main(int argc, char *argv[])
 
         /*
                 GPS1:/dev/ttyS0
-		GPS2:/dev/ttyS1
-                TEL1:/dev/ttyS2
-                TEL2:/dev/ttyS3
+                TEL1:/dev/ttyS1
+                TEL2:/dev/ttyS2
+                TEL4:/dev/ttyS3
          */
 
          uart_read = rw_uart_init();
@@ -421,6 +424,7 @@ int rw_uart_thread_main(int argc, char *argv[])
         receive_start(&receive_thread);
 
         //last_time_send = hrt_absolute_time();
+        printf("%s\n", __DATE__);
 
         while (!rw_thread_should_exit)
         {
@@ -432,7 +436,7 @@ int rw_uart_thread_main(int argc, char *argv[])
                 msg_pack_send(msg_data, &msg_pd);
                 //last_time_send = hrt_absolute_time();
                 //fflush(stdout);
-                usleep(100000);
+                usleep(200000);
             }
         }
 

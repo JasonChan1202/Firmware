@@ -95,7 +95,6 @@
 
 #define TIMEOUT_5HZ 500
 #define RATE_MEASUREMENT_PERIOD 5000000
-#define PARSE_RTK_RTCM	0
 
 typedef enum {
 	GPS_DRIVER_MODE_NONE = 0,
@@ -212,6 +211,7 @@ private:
 
 	static bool _have_rtk_device;
 	bool _is_rtk_device;
+	bool _is_ubx_device;
 
 	static volatile GPS *_secondary_instance;
 
@@ -274,7 +274,6 @@ private:
 	void initializeCommunicationDump();
 };
 
-//volatile bool GPS::_is_gps_main_advertised = false;
 bool GPS::_have_rtk_device = false;
 volatile GPS *GPS::_secondary_instance = nullptr;
 
@@ -686,6 +685,7 @@ GPS::run()
 
 	uint64_t last_rate_measurement = hrt_absolute_time();
 	unsigned last_rate_count = 0;
+	_is_ubx_device = false;
 
 	/* loop handling received serial bytes and also configuring in between */
 	while (!should_exit()) {
@@ -728,14 +728,15 @@ GPS::run()
 
 			switch (_mode) {
 			case GPS_DRIVER_MODE_NONE:
-				_mode = GPS_DRIVER_MODE_UBX;//GPS_DRIVER_MODE_MINMEA;
-
-			case GPS_DRIVER_MODE_MINMEA:
-				_helper = new GPSDriverMINMEA(&GPS::callback, this, &_report_gps_pos, _p_report_sat_info);
-				break;
+				_mode = GPS_DRIVER_MODE_UBX;
 
 			case GPS_DRIVER_MODE_UBX:
 				_helper = new GPSDriverUBX(_interface, &GPS::callback, this, &_report_gps_pos, _p_report_sat_info, gps_ubx_dynmodel);
+				break;
+
+			case GPS_DRIVER_MODE_MINMEA:
+				if(!_is_ubx_device)
+					_helper = new GPSDriverMINMEA(&GPS::callback, this, &_report_gps_pos, _p_report_sat_info);
 				break;
 
 			case GPS_DRIVER_MODE_MTK:
@@ -764,8 +765,8 @@ GPS::run()
 				_report_gps_pos.heading_offset = heading_offset;
 
 				if (_mode == GPS_DRIVER_MODE_UBX) {
-
 					/* GPS is obviously detected successfully, reset statistics */
+					_is_ubx_device = true;
 					_helper->resetUpdateRates();
 				}
 

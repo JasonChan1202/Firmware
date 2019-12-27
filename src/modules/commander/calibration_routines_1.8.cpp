@@ -33,7 +33,7 @@
 
 /**
  * @file calibration_routines.cpp
- * Calibration routines implementations.
+ * Calibration routines implementations.  
  *
  * @author Lorenz Meier <lm@inf.ethz.ch>
  */
@@ -51,7 +51,6 @@
 #include <lib/ecl/geo/geo.h>
 #include <string.h>
 #include <mathlib/mathlib.h>
-#include <matrix/math.hpp>
 
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/sensor_combined.h>
@@ -236,7 +235,7 @@ int sphere_fit_least_squares(const float x[], const float y[], const float z[],
 
 	return 0;
 }
-
+/*
 int ellipsoid_fit_least_squares(const float x[], const float y[], const float z[],
 				unsigned int size, int max_iterations, float delta, float *offset_x, float *offset_y, float *offset_z,
 				float *sphere_radius, float *diag_x, float *diag_y, float *diag_z, float *offdiag_x, float *offdiag_y, float *offdiag_z)
@@ -260,7 +259,7 @@ int ellipsoid_fit_least_squares(const float x[], const float y[], const float z[
 
 	return 0;
 }
-
+*/
 int run_lm_sphere_fit(const float x[], const float y[], const float z[], float &_fitness, float &_sphere_lambda,
 		      unsigned int size, float *offset_x, float *offset_y, float *offset_z,
 		      float *sphere_radius, float *diag_x, float *diag_y, float *diag_z, float *offdiag_x, float *offdiag_y, float *offdiag_z)
@@ -271,19 +270,22 @@ int run_lm_sphere_fit(const float x[], const float y[], const float z[], float &
 	float fitness = _fitness;
 	float fit1 = 0.0f, fit2 = 0.0f;
 
-	matrix::SquareMatrix<float, 4> JTJ;
-	matrix::SquareMatrix<float, 4> JTJ2;
-	float JTFI[4] = {};
+	float JTJ[16];
+	float JTJ2[16];
+	float JTFI[4];
 	float residual = 0.0f;
+	memset(JTJ, 0, sizeof(JTJ));
+	memset(JTJ2, 0, sizeof(JTJ2));
+	memset(JTFI, 0, sizeof(JTFI));
 
 	// Gauss Newton Part common for all kind of extensions including LM
 	for (uint16_t k = 0; k < _samples_collected; k++) {
 
 		float sphere_jacob[4];
 		//Calculate Jacobian
-        float A = (*diag_x    * (x[k] - *offset_x)) + (*offdiag_x * (y[k] - *offset_y)) + (*offdiag_y * (z[k] - *offset_z));
-        float B = (*offdiag_x * (x[k] - *offset_x)) + (*diag_y    * (y[k] - *offset_y)) + (*offdiag_z * (z[k] - *offset_z));
-        float C = (*offdiag_y * (x[k] - *offset_x)) + (*offdiag_z * (y[k] - *offset_y)) + (*diag_z    * (z[k] - *offset_z));
+		float A = (*diag_x    * (x[k] - *offset_x)) + (*offdiag_x * (y[k] - *offset_y)) + (*offdiag_y * (z[k] - *offset_z));
+		float B = (*offdiag_x * (x[k] - *offset_x)) + (*diag_y    * (y[k] - *offset_y)) + (*offdiag_z * (z[k] - *offset_z));
+		float C = (*offdiag_y * (x[k] - *offset_x)) + (*offdiag_z * (y[k] - *offset_y)) + (*diag_z    * (z[k] - *offset_z));
 		float length = sqrtf(A * A + B * B + C * C);
 
 		// 0: partial derivative (radius wrt fitness fn) fn operated on sample
@@ -297,8 +299,8 @@ int run_lm_sphere_fit(const float x[], const float y[], const float z[], float &
 		for (uint8_t i = 0; i < 4; i++) {
 			// compute JTJ
 			for (uint8_t j = 0; j < 4; j++) {
-				JTJ(i, j) += sphere_jacob[i] * sphere_jacob[j];
-				JTJ2(i, j) += sphere_jacob[i] * sphere_jacob[j]; //a backup JTJ for LM
+				JTJ[i * 4 + j] += sphere_jacob[i] * sphere_jacob[j];
+				JTJ2[i * 4 + j] += sphere_jacob[i] * sphere_jacob[j]; //a backup JTJ for LM
 			}
 
 			JTFI[i] += sphere_jacob[i] * residual;
@@ -313,22 +315,22 @@ int run_lm_sphere_fit(const float x[], const float y[], const float z[], float &
 	memcpy(fit2_params, fit1_params, sizeof(fit1_params));
 
 	for (uint8_t i = 0; i < 4; i++) {
-		JTJ(i, i) += _sphere_lambda;
-		JTJ2(i, i) += _sphere_lambda / lma_damping;
+		JTJ[i * 4 + i] += _sphere_lambda;
+		JTJ2[i * 4 + i] += _sphere_lambda / lma_damping;
 	}
 
-	if (!JTJ.I(JTJ)) {
+	if (!inverse4x4(JTJ, JTJ)) {
 		return -1;
 	}
 
-	if (!JTJ2.I(JTJ2)) {
+	if (!inverse4x4(JTJ2, JTJ2)) {
 		return -1;
 	}
 
 	for (uint8_t row = 0; row < 4; row++) {
 		for (uint8_t col = 0; col < 4; col++) {
-			fit1_params[row] -= JTFI[col] * JTJ(row, col);
-			fit2_params[row] -= JTFI[col] * JTJ2(row, col);
+			fit1_params[row] -= JTFI[col] * JTJ[row * 4 + col];
+			fit2_params[row] -= JTFI[col] * JTJ2[row * 4 + col];
 		}
 	}
 
@@ -393,13 +395,15 @@ int run_lm_ellipsoid_fit(const float x[], const float y[], const float z[], floa
 	const float lma_damping = 10.0f;
 	float _samples_collected = size;
 	float fitness = _fitness;
-	float fit1 = 0.0f;
-	float fit2 = 0.0f;
+	float fit1 = 0.0f, fit2 = 0.0f;
 
-	float JTJ[81] = {};
-	float JTJ2[81] = {};
-	float JTFI[9] = {};
+	float JTJ[81];
+	float JTJ2[81];
+	float JTFI[9];
 	float residual = 0.0f;
+	memset(JTJ, 0, sizeof(JTJ));
+	memset(JTJ2, 0, sizeof(JTJ2));
+	memset(JTFI, 0, sizeof(JTFI));
 	float ellipsoid_jacob[9];
 
 	// Gauss Newton Part common for all kind of extensions including LM
@@ -456,6 +460,8 @@ int run_lm_ellipsoid_fit(const float x[], const float y[], const float z[], floa
 	if (!mat_inverse(JTJ2, JTJ2, 9)) {
 		return -1;
 	}
+
+
 
 	for (uint8_t row = 0; row < 9; row++) {
 		for (uint8_t col = 0; col < 9; col++) {
@@ -584,7 +590,7 @@ enum detect_orientation_return detect_orientation(orb_advert_t *mavlink_log_pub,
 			if (accel_disp[0] < still_thr2 &&
 			    accel_disp[1] < still_thr2 &&
 			    accel_disp[2] < still_thr2) {
-				/* is still now */
+				/* is still now */  //\BE\B2ֹ\B5\C4
 				if (t_still == 0) {
 					/* first time */
 					calibration_log_info(mavlink_log_pub, "[cal] detected rest position, hold still...");
@@ -593,7 +599,7 @@ enum detect_orientation_return detect_orientation(orb_advert_t *mavlink_log_pub,
 
 				} else {
 					/* still since t_still */
-					if (t > t_still + still_time) {
+					if (t > t_still + still_time) {  //\BF\ED\CBɼ\EC\B2\E2\C7\E9\BF\F6\CF±\A3\B3־\B2ֹ0.5\C3뼴\BF\C9
 						/* vehicle is still, exit from the loop to detection of its orientation */
 						break;
 					}
@@ -602,10 +608,10 @@ enum detect_orientation_return detect_orientation(orb_advert_t *mavlink_log_pub,
 			} else if (accel_disp[0] > still_thr2 * 4.0f ||
 				   accel_disp[1] > still_thr2 * 4.0f ||
 				   accel_disp[2] > still_thr2 * 4.0f) {
-				/* not still, reset still start time */
+				/* not still, reset still start time */  //\B7Ǿ\B2ֹ\B5\C4
 				if (t_still != 0) {
 					calibration_log_info(mavlink_log_pub, "[cal] detected motion, hold still...");
-					px4_usleep(200000);
+					usleep(200000);
 					t_still = 0;
 				}
 			}
@@ -680,6 +686,8 @@ const char *detect_orientation_str(enum detect_orientation_return orientation)
 	return rgOrientationStrs[orientation];
 }
 
+//this is the original function of calibrate_from_orientation
+/*
 calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 		int		cancel_sub,
 		bool	side_data_collected[detect_orientation_side_count],
@@ -727,7 +735,7 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 			break;
 		}
 
-		/* inform user which orientations are still needed */
+		//inform user which orientations are still needed
 		char pendingStr[80];
 		pendingStr[0] = 0;
 
@@ -739,41 +747,32 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 		}
 
 		calibration_log_info(mavlink_log_pub, "[cal] pending:%s", pendingStr);
-		px4_usleep(20000);
+		usleep(20000);
 		calibration_log_info(mavlink_log_pub, "[cal] hold vehicle still on a pending side");
-		px4_usleep(20000);
-
-		if (!side_data_collected[DETECT_ORIENTATION_RIGHTSIDE_UP] || !side_data_collected[DETECT_ORIENTATION_UPSIDE_DOWN]){
-		    rgbled_set_color_and_mode(led_control_s::COLOR_GREEN, led_control_s::MODE_BLINK_FAST); 
-		}else if (!side_data_collected[DETECT_ORIENTATION_TAIL_DOWN] || !side_data_collected[DETECT_ORIENTATION_NOSE_DOWN]){
-		    rgbled_set_color_and_mode(led_control_s::COLOR_YELLOW, led_control_s::MODE_BLINK_FAST);
-		}else if (!side_data_collected[DETECT_ORIENTATION_LEFT] || !side_data_collected[DETECT_ORIENTATION_RIGHT]){
-		    rgbled_set_color_and_mode(led_control_s::COLOR_BLUE, led_control_s::MODE_BLINK_FAST);
-		}
-
+		usleep(20000);
 		enum detect_orientation_return orient = detect_orientation(mavlink_log_pub, cancel_sub, sub_accel,
-								lenient_still_position);
+							lenient_still_position);
 
 		if (orient == DETECT_ORIENTATION_ERROR) {
 			orientation_failures++;
 			calibration_log_info(mavlink_log_pub, "[cal] detected motion, hold still...");
-			px4_usleep(20000);
+			usleep(20000);
 			continue;
 		}
 
-		/* inform user about already handled side */
+		//inform user about already handled side
 		if (side_data_collected[orient]) {
 			orientation_failures++;
 			set_tune(TONE_NOTIFY_NEGATIVE_TUNE);
 			calibration_log_info(mavlink_log_pub, "[cal] %s side already completed", detect_orientation_str(orient));
-			px4_usleep(20000);
+			usleep(20000);
 			continue;
 		}
 
 		calibration_log_info(mavlink_log_pub, CAL_QGC_ORIENTATION_DETECTED_MSG, detect_orientation_str(orient));
-		px4_usleep(20000);
+		usleep(20000);
 		calibration_log_info(mavlink_log_pub, CAL_QGC_ORIENTATION_DETECTED_MSG, detect_orientation_str(orient));
-		px4_usleep(20000);
+		usleep(20000);
 		orientation_failures = 0;
 
 		// Call worker routine
@@ -784,9 +783,9 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 		}
 
 		calibration_log_info(mavlink_log_pub, CAL_QGC_SIDE_DONE_MSG, detect_orientation_str(orient));
-		px4_usleep(20000);
+		usleep(20000);
 		calibration_log_info(mavlink_log_pub, CAL_QGC_SIDE_DONE_MSG, detect_orientation_str(orient));
-		px4_usleep(20000);
+		usleep(20000);
 
 		// Note that this side is complete
 		side_data_collected[orient] = true;
@@ -796,7 +795,137 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 
 		// temporary priority boost for the white blinking led to come trough
 		rgbled_set_color_and_mode(led_control_s::COLOR_WHITE, led_control_s::MODE_BLINK_FAST, 3, 1);
-		px4_usleep(200000);
+		usleep(200000);
+	}
+
+	if (sub_accel >= 0) {
+		px4_close(sub_accel);
+	}
+
+	return result;
+}
+*/
+
+/*
+* modified by cyj, 2018/11/26
+* only calibrate two sides of the orientation
+*/ 
+calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
+		int		cancel_sub,
+		bool	side_data_collected[detect_orientation_side_count],
+		calibration_from_orientation_worker_t calibration_worker,
+		void	*worker_data,
+		bool	lenient_still_position)
+{
+	calibrate_return result = calibrate_return_ok;
+
+	// Setup subscriptions to onboard accel sensor
+
+	int sub_accel = orb_subscribe(ORB_ID(sensor_combined));
+
+	if (sub_accel < 0) {
+		calibration_log_critical(mavlink_log_pub, CAL_QGC_FAILED_MSG, "No onboard accel");
+		return calibrate_return_error;
+	}
+
+	unsigned orientation_failures = 0;
+
+	// Rotate through all requested orientation
+	while (true) {
+		if (calibrate_cancel_check(mavlink_log_pub, cancel_sub)) {
+			result = calibrate_return_cancelled;
+			break;
+		}
+
+		if (orientation_failures > 4) {  //\CBĴ\CE\C3\E6\BC\EC\B2\E2\B3\F6\B4\ED\A3\AC\CD˳\F6
+			result = calibrate_return_error;
+			calibration_log_critical(mavlink_log_pub, CAL_QGC_FAILED_MSG, "timeout: no motion");
+			break;
+		}
+
+		unsigned int side_complete_count = 0;
+
+		// Update the number of completed sides
+		for (unsigned i = 0; i < detect_orientation_side_count; i++) {
+			if (side_data_collected[i]) {
+				side_complete_count++;
+			}
+		}
+
+		if(side_complete_count >= detect_orientation_side_simplify_count
+			&& side_data_collected[DETECT_ORIENTATION_RIGHTSIDE_UP]
+			&& side_data_collected[DETECT_ORIENTATION_NOSE_DOWN]) {
+			// We have completed, move on
+			break;
+		}
+
+		//inform user which orientations are still needed
+		char pendingStr[80];
+		pendingStr[0] = 0;
+
+		if(!side_data_collected[DETECT_ORIENTATION_RIGHTSIDE_UP]) {
+			strncat(pendingStr, " ", sizeof(pendingStr) - 1);
+			strncat(pendingStr, detect_orientation_str(DETECT_ORIENTATION_RIGHTSIDE_UP), sizeof(pendingStr) - 1);
+		}
+
+		if(!side_data_collected[DETECT_ORIENTATION_NOSE_DOWN]) {
+			strncat(pendingStr, " ", sizeof(pendingStr) - 1);
+			strncat(pendingStr, detect_orientation_str(DETECT_ORIENTATION_NOSE_DOWN), sizeof(pendingStr) - 1);
+		}
+		
+		calibration_log_info(mavlink_log_pub, "[cal] pending:%s", pendingStr);
+		usleep(20000);
+		calibration_log_info(mavlink_log_pub, "[cal] hold vehicle still on a pending side");
+		usleep(20000);
+		enum detect_orientation_return orient = detect_orientation(mavlink_log_pub, cancel_sub, sub_accel,
+							lenient_still_position);  //\B7\B5\BBؼ\EC\B2⵽\B5\C4\C3\E6
+
+		if (orient == DETECT_ORIENTATION_ERROR) { //\B4\ED\CE\F3\B4\A6\C0\ED
+			orientation_failures++;
+			calibration_log_info(mavlink_log_pub, "[cal] detected motion, hold still...");
+			usleep(20000);
+			continue;
+		}
+		else if(orient != DETECT_ORIENTATION_RIGHTSIDE_UP && orient != DETECT_ORIENTATION_NOSE_DOWN) {
+			orientation_failures++;
+			set_tune(TONE_NOTIFY_NEGATIVE_TUNE); //\B7\A2\B3\F6\BE\AF\B8\E6\C9\F9\D2\F4
+			calibration_log_info(mavlink_log_pub, "[cal] vehicle still on a wrong side, hold vehicle still on a pending side");
+			usleep(20000);
+			continue;
+		}
+
+		//inform user about already handled side
+		if (side_data_collected[orient]) {  //\D2Ѳ\C9\D1\F9\B9\FD\B5\C4\C3\E6\CE\DE\D0\E8\B2\C9\D1\F9\A3\AC\C3\E6\BC\EC\B2\E2\B3\F6\B4\ED\BC\C6\CA\FD\BC\D31
+			orientation_failures++;
+			set_tune(TONE_NOTIFY_NEGATIVE_TUNE); //\B7\A2\B3\F6\BE\AF\B8\E6\C9\F9\D2\F4
+			calibration_log_info(mavlink_log_pub, "[cal] %s side already completed", detect_orientation_str(orient));
+			usleep(20000);
+			continue;
+		}
+		
+		calibration_log_info(mavlink_log_pub, CAL_QGC_ORIENTATION_DETECTED_MSG, detect_orientation_str(orient));
+		usleep(20000);
+		orientation_failures = 0;
+
+		// Call worker routine //\B6Լ\EC\B2⵽\B5\C4\C3濪ʼ\D0\FDת\B2\C9\D1\F9
+		result = calibration_worker(orient, cancel_sub, worker_data); //\CA\FD\BEݴ\E6\B7\C5\D4\DA\E5worker_data\D6\D0
+
+		if (result != calibrate_return_ok) {
+			break;
+		}
+
+		calibration_log_info(mavlink_log_pub, CAL_QGC_SIDE_DONE_MSG, detect_orientation_str(orient));
+		usleep(20000);
+
+		// Note that this side is complete //\B8\C3\C3\E6\CA\FD\BEݲ\C9\D1\F9\CD\EA\B3\C9
+		side_data_collected[orient] = true;
+
+		// output neutral tune
+		set_tune(TONE_NOTIFY_NEUTRAL_TUNE);  //\CD\EA\B3\C9һ\C3\E6\B2\C9\D1\F9\B7\A2\B3\F6\C9\F9\D2\F4
+
+		// temporary priority boost for the white blinking led to come trough  //led\B5\C6
+		rgbled_set_color_and_mode(led_control_s::COLOR_WHITE, led_control_s::MODE_BLINK_FAST, 3, 1);
+		usleep(200000);
 	}
 
 	if (sub_accel >= 0) {
@@ -808,19 +937,7 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 
 int calibrate_cancel_subscribe()
 {
-	int vehicle_command_sub = orb_subscribe(ORB_ID(vehicle_command));
-
-	if (vehicle_command_sub >= 0) {
-		// make sure we won't read any old messages
-		struct vehicle_command_s cmd;
-		bool update;
-
-		while (orb_check(vehicle_command_sub, &update) == 0 && update) {
-			orb_copy(ORB_ID(vehicle_command), vehicle_command_sub, &cmd);
-		}
-	}
-
-	return vehicle_command_sub;
+	return orb_subscribe(ORB_ID(vehicle_command));
 }
 
 void calibrate_cancel_unsubscribe(int cmd_sub)
@@ -859,12 +976,12 @@ bool calibrate_cancel_check(orb_advert_t *mavlink_log_pub, int cancel_sub)
 		// ignore internal commands, such as VEHICLE_CMD_DO_MOUNT_CONTROL from vmount
 		if (cmd.from_external) {
 			if (cmd.command == vehicle_command_s::VEHICLE_CMD_PREFLIGHT_CALIBRATION &&
-			    (int)cmd.param1 == 0 &&
-			    (int)cmd.param2 == 0 &&
-			    (int)cmd.param3 == 0 &&
-			    (int)cmd.param4 == 0 &&
-			    (int)cmd.param5 == 0 &&
-			    (int)cmd.param6 == 0) {
+					(int)cmd.param1 == 0 &&
+					(int)cmd.param2 == 0 &&
+					(int)cmd.param3 == 0 &&
+					(int)cmd.param4 == 0 &&
+					(int)cmd.param5 == 0 &&
+					(int)cmd.param6 == 0) {
 				calibrate_answer_command(mavlink_log_pub, cmd, vehicle_command_s::VEHICLE_CMD_RESULT_ACCEPTED);
 				mavlink_log_critical(mavlink_log_pub, CAL_QGC_CANCELLED_MSG);
 				return true;
