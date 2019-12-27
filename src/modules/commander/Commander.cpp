@@ -1194,7 +1194,6 @@ Commander::set_home_position_alt_only()
 void
 Commander::run()
 {
-
     //DG rc_mag_cali flags
     uint8_t mode_slot_pre = 0;
     uint64_t timestamp_pre =0;

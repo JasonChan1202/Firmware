@@ -388,9 +388,9 @@ int rw_uart_thread_main(int argc, char *argv[])
 
         /*
                 GPS1:/dev/ttyS0
-		GPS2:/dev/ttyS1
-                TEL1:/dev/ttyS2
-                TEL2:/dev/ttyS3
+                TEL1:/dev/ttyS1
+                TEL2:/dev/ttyS2
+                TEL4:/dev/ttyS3
          */
 
          uart_read = rw_uart_init();

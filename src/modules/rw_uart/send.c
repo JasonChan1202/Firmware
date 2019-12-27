@@ -530,7 +530,4 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
         {dyd->GPS_baro_status |= 0x04;}
 
     dyd->power_voltage = (uint16_t) (msg_data.dg_voltage_data.voltage_battery_filtered_v *100);
-    printf("dg_voltage is %d\n", dyd->power_voltage);
-    printf("dg_mag is %d\n", dyd->mag_status);
-
 }
