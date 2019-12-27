@@ -252,7 +252,7 @@ find_program(SHELLCHECK_PATH shellcheck)
 
 if(SHELLCHECK_PATH)
 
-	# TODO: fix SC2086, SC2166
+	# TODO: fix SC2086, SC2166 
 	add_custom_target(shellcheck
 		COMMAND ${SHELLCHECK_PATH} --shell=sh
 			--exclude=SC2121 # SC2121: To assign a variable, use just 'var=value'
