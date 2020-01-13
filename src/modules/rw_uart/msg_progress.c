@@ -271,16 +271,16 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             break;
         case WIFI_COMM_AUTO_TAKEOFF:
             if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos){
-                set_command_param(&msg_data->command_data, 400,
-                                                1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
-                publish_commander_pd(msg_pd, msg_data);
-                usleep(1000000);
-                set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
-                                  (msg_data->global_position_data.lat),
-                                  (msg_data->global_position_data.lon),
-                                  (msg_data->home_position_data.alt + 5.0));
-                publish_commander_pd(msg_pd, msg_data);
-                printf("Passing takeoff\n");
+		set_command_param(&msg_data->command_data, 400,
+                                        1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
+	        publish_commander_pd(msg_pd, msg_data);
+	        usleep(1000000);
+	        set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
+	                          (msg_data->global_position_data.lat),
+	                          (msg_data->global_position_data.lon),
+	                          (msg_data->home_position_data.alt + 5.0));
+	        publish_commander_pd(msg_pd, msg_data);
+	        printf("Passing takeoff\n"); 
             }
             break;
         case WIFI_COMM_WP_UPLOAD:

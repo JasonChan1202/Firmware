@@ -195,7 +195,15 @@ void LogWriterFile::run()
 			bool start = false;
 			pthread_mutex_lock(&_mtx);
 			pthread_cond_wait(&_cv, &_mtx);
-			start = _buffers[0]._should_run || _buffers[1]._should_run;
+			for (int i = 0; i < (int)LogType::Count; i++)	//modified in 2020.0113
+			{
+				if (_buffers[i]._should_run)
+				{
+					start = true;
+					break;
+				}
+			}
+			//start = _buffers[0]._should_run || _buffers[1]._should_run;
 			pthread_mutex_unlock(&_mtx);
 
 			if (start) {
@@ -277,13 +285,26 @@ void LogWriterFile::run()
 					--i;
 				}
 			}
-
-
+			
+			bool logFileAllClosed = true; 
+			for (int k = 0; k < (int)LogType::Count; k++)
+			{
+				if (_buffers[k].fd() >= 0)
+				{
+					logFileAllClosed = false;
+					break;
+				}
+			}
+			if (logFileAllClosed)
+			{
+				break;
+			}
+/*
 			if (_buffers[0].fd() < 0 && _buffers[1].fd() < 0) {
 				// stop when both files are closed
 				break;
 			}
-
+*/
 			/* Wait for a call to notify(), which indicates new data is available.
 			 * Note that at this point there could already be new data available (because of a longer write),
 			 * and calling pthread_cond_wait() will still wait for the next notify(). But this is generally
