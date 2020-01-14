@@ -58,15 +58,16 @@ LogWriterFile::LogWriterFile(size_t buffer_size)
 	//We always write larger chunks (orb messages) to the buffer, so the buffer
 	//needs to be larger than the minimum write chunk (300 is somewhat arbitrary)
 	{
-		math::max(buffer_size, _min_write_chunk + 300),
+        //buffer_size == 0 ? 1 :
+                           math::max(buffer_size, _min_write_chunk + 300),
 		perf_alloc(PC_ELAPSED, "logger_sd_write"), perf_alloc(PC_ELAPSED, "logger_sd_fsync")},
 
 	{
-		1024,
+        1024,
 		perf_alloc(PC_ELAPSED, "logger_sd_write_dglog"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_dglog")},	//add by cyj, 191017
 
 	{
-		300, // buffer size for the mission log (can be kept fairly small)
+        300, // buffer size for the mission log (can be kept fairly small)
 		perf_alloc(PC_ELAPSED, "logger_sd_write_mission"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_mission")}
 }
 {
@@ -165,7 +166,7 @@ void LogWriterFile::thread_stop()
 {
 	// this will terminate the main loop of the writer thread
 	_exit_thread = true;
-	_buffers[0]._should_run = _buffers[1]._should_run = false;
+    _buffers[0]._should_run = _buffers[1]._should_run = _buffers[2]._should_run = false;
 
 	notify();
 
@@ -195,15 +196,15 @@ void LogWriterFile::run()
 			bool start = false;
 			pthread_mutex_lock(&_mtx);
 			pthread_cond_wait(&_cv, &_mtx);
-			for (int i = 0; i < (int)LogType::Count; i++)	//modified in 2020.0113
-			{
-				if (_buffers[i]._should_run)
-				{
-					start = true;
-					break;
+
+			for (int type_count = 0; type_count < (int)LogType::Count; type_count ++) {
+				if (_buffers[type_count]._should_run) {
+				    start = true;
+				    break;
 				}
 			}
-			//start = _buffers[0]._should_run || _buffers[1]._should_run;
+			//start = _buffers[0]._should_run || _buffers[1]._should_run || _buffers[2]._should_run;
+
 			pthread_mutex_unlock(&_mtx);
 
 			if (start) {
@@ -285,26 +286,22 @@ void LogWriterFile::run()
 					--i;
 				}
 			}
-			
-			bool logFileAllClosed = true; 
-			for (int k = 0; k < (int)LogType::Count; k++)
-			{
-				if (_buffers[k].fd() >= 0)
+
+			bool stop = true;
+			for (int type_count = 0; type_count < (int)LogType::Count; type_count ++) {
+				if (_buffers[type_count].fd() >= 0)
 				{
-					logFileAllClosed = false;
-					break;
+				    stop = false;
+				    break;
 				}
 			}
-			if (logFileAllClosed)
+			//if (_buffers[0].fd() < 0 && _buffers[1].fd() < 0 && _buffers[2].fd() < 0)
+			if (stop)
 			{
-				break;
-			}
-/*
-			if (_buffers[0].fd() < 0 && _buffers[1].fd() < 0) {
 				// stop when both files are closed
 				break;
 			}
-*/
+
 			/* Wait for a call to notify(), which indicates new data is available.
 			 * Note that at this point there could already be new data available (because of a longer write),
 			 * and calling pthread_cond_wait() will still wait for the next notify(). But this is generally

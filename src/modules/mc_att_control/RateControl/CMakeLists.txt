@@ -1,6 +1,6 @@
 ############################################################################
 #
-#   Copyright (c) 2015 PX4 Development Team. All rights reserved.
+#   Copyright (c) 2019 PX4 Development Team. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,26 +30,15 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 ############################################################################
-px4_add_module(
-        MODULE modules__rw_uart
-        MAIN rw_uart
-        STACK_MAIN 6000
-        COMPILE_FLAGS
-                -Wno-double-promotion
-                -Wno-float-equal
-                -Wno-missing-declarations
-                -Wno-sign-compare
-                -Wno-unknown-warning-option
-                -Wno-unused-but-set-variable
-                -Wno-unused-result
-                -Wno-unused-variable
-	SRCS
-                rw_uart.c
-                send.c
-                check_command_repeat.c
-                receive.c
-                msg_progress.c
-	DEPENDS
-                git_ecl
-                version
-	)
+
+px4_add_library(RateControl
+	RateControl.cpp
+)
+target_include_directories(RateControl
+	PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(RateControl PRIVATE mathlib)
+
+px4_add_gtest(SRC RateControlTest.cpp LINKLIBS RateControl)
