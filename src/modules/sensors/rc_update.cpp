@@ -476,7 +476,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
             {
                 manual.virtual_stick_enable = true;
                 //_vs_enable_DG = hrt_absolute_time() - vs_last_timestamp > 150000 ? 0 : _vs_sp.vs_enable;
-                _vs_enable_DG = hrt_absolute_time() - vs_last_timestamp > 200000 ? 0 : 1;
+                _vs_enable_DG = hrt_absolute_time() - vs_last_timestamp > 300000 ? 0 : 1;
                 //manual.virtual_stick_enable = _vs_enable_DG;
                 manual.data_source = 255;
 

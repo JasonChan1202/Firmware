@@ -418,6 +418,8 @@ typedef struct {
     param_t z_p_hd;
     param_t up_vel_max_hd;
     param_t xy_vel_max_hd;
+    param_t xy_vel_max1_hd;
+    param_t xy_vel_max2_hd;
     param_t roll_rate_hd;
     param_t pitch_rate_hd;
     param_t yaw_rate_hd;
@@ -487,7 +489,7 @@ extern uint16_t check_crc(const uint8_t *buffer, uint8_t buflen);
 
 extern void msg_pack_send(MSG_orb_data msg_data, MSG_orb_pub *msg_pd);
 
-extern int find_r_type(uint8_t *buffer, MSG_orb_data msg_data, MSG_orb_pub *msg_pd,
+extern int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data, MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd);
 
 extern void msg_param_saved_get(MSG_param_hd msg_hd);

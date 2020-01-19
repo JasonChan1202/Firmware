@@ -360,7 +360,7 @@ void setd_pack_send (void){
     memcpy(send_message, wp_data.push, sizeof(SETD));
     send_message[26] = calculate_sum_check(send_message, sizeof(SETD));
     write(uart_read, send_message, sizeof(SETD));
-    printf("setd_pack_send finish \n");
+    //printf("setd_pack_send finish \n");
 }
 
 void exyf_response_pack(MSG_type msg_type, MSG_param_hd msg_hd){
