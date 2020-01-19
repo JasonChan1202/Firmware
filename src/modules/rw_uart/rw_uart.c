@@ -211,6 +211,8 @@ void msg_param_hd_cache (void)
     msg_hd.throttle_hd = param_find("THR_MDL_FAC");
     msg_hd.up_vel_max_hd = param_find("MPC_Z_VEL_MAX_UP");
     msg_hd.xy_vel_max_hd = param_find("MPC_VEL_MANUAL");
+    msg_hd.xy_vel_max1_hd = param_find("MPC_XY_CRUISE");
+    msg_hd.xy_vel_max2_hd = param_find("MPC_XY_VEL_MAX");
     msg_hd.roll_rate_hd = param_find("MC_ROLLRATE_MAX");
     msg_hd.pitch_rate_hd = param_find("MC_PITCHRATE_MAX");
     msg_hd.yaw_rate_hd = param_find("MC_YAWRATE_MAX");
@@ -257,7 +259,7 @@ int read_to_buff(uint8_t *buffer, int start, int end)
     {
         if (read(uart_read,&data,1) > 0){
             buffer[i] = data;
-            printf("buffer[%d] is %x\n", i ,data);
+            //printf("buffer[%d] is %x\n", i ,data);
             i++;
             error_count = 0;
         }
@@ -292,7 +294,7 @@ int rw_uart_main(int argc, char *argv[])
                 rw_uart_task = px4_task_spawn_cmd("rw_uart",
                         SCHED_DEFAULT,
                         SCHED_PRIORITY_DEFAULT,//调度优先级
-                        PX4_STACK_ADJUSTED(6000),//堆栈分配大小
+                        PX4_STACK_ADJUSTED(5000),//堆栈分配大小
                         rw_uart_thread_main,
                         (argv) ? (char *const *)&argv[2] : (char *const *)NULL);
                 return 0;
@@ -321,7 +323,7 @@ int rw_uart_main(int argc, char *argv[])
 
 static void *receive_loop(void *arg)
 {
-    uint8_t buffer[150] ={};
+    uint8_t buffer[300] ={};
     px4_pollfd_struct_t fds[1] = {
         { .fd = uart_read, .events = POLLIN }
     };
@@ -336,11 +338,13 @@ static void *receive_loop(void *arg)
        if (error_count >20) {
            remain = 0;
            error_count =0;
-       }
+           memset(buffer, 0, sizeof(buffer));
+        }
 
       if (error_count >0 || poll(&fds[0], 1, 20) > 0)
         {
           usleep(error_count * 1000);
+          //printf("error_count is %d\n", error_count);
           nread= read(uart_read, &buffer[remain], sizeof(buffer) - (size_t)remain);
           if (nread < 0) nread =0;
 //           pthread_mutex_lock(&mutex);
@@ -362,11 +366,14 @@ static void *receive_loop(void *arg)
                }
             }
             remain = nread + remain - read_finish;
-            uint8_t buffer_move[150] = {};
+            uint8_t buffer_move[300] = {};
             memcpy(buffer_move, &buffer[read_finish], (size_t)remain);
             memcpy(buffer, buffer_move, sizeof(buffer_move));
         }
-    }
+//      else if (error_count == 0){
+//          memset(buffer, 0, sizeof(buffer));
+//      }
+   }
     return NULL;
 }
 
@@ -380,7 +387,7 @@ void receive_start(pthread_t *thread)
     param.sched_priority = SCHED_PRIORITY_MAX - 80;
     (void)pthread_attr_setschedparam(&receiveloop_attr, &param);
 
-    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(6000));
+    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(5000));
     pthread_create(thread, &receiveloop_attr, receive_loop, NULL);
 
     pthread_attr_destroy(&receiveloop_attr);
@@ -428,7 +435,7 @@ int rw_uart_thread_main(int argc, char *argv[])
         receive_start(&receive_thread);
 
         //last_time_send = hrt_absolute_time();
-        printf("%s\n", __DATE__);
+        //printf("%s\n", __DATE__);
 
         while (!rw_thread_should_exit)
         {

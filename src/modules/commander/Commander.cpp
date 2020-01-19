@@ -2362,7 +2362,7 @@ Commander::run()
                         const vehicle_local_position_s &local_position = _local_position_sub.get();
 
                         if (armed.armed) {
-                                if ((!was_armed || (was_landed && !land_detector.landed)) &&
+                                if ((!was_armed || (was_landed && !land_detector.landed) || !status_flags.condition_home_position_valid) &&
                                     (hrt_elapsed_time(&commander_boot_timestamp) > INAIR_RESTART_HOLDOFF_INTERVAL)) {
 
                                         /* update home position on arming if at least 500 ms from commander start spent to avoid setting home on in-air restart */
