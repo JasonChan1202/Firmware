@@ -61,6 +61,16 @@ land_detector start multicopter
 rw_uart start
 
 #
+# Start DG Follow Module
+#
+follow_dg start
+
+#
+# Start DG Mission Module
+#
+mission_dg start
+
+#
 # Send follow position (v2 only)
 #
 #send_position start

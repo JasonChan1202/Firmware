@@ -3078,7 +3078,8 @@ Commander::set_main_state_rc(const vehicle_status_s &status_local, bool *changed
 //                                    if (sp_man.mode_switch==manual_control_setpoint_s::SWITCH_POS_ON)
 //                                          new_mode=commander_state_s::MAIN_STATE_AUTO_RTL;
 //                                    else
-                                          new_mode=commander_state_s::MAIN_STATE_POSCTL;
+                                          //new_mode=commander_state_s::MAIN_STATE_POSCTL;
+                                          new_mode=commander_state_s::MAIN_STATE_AUTO_FOLLOW_TARGET;
                                      break;
                                default:
                                    return TRANSITION_DENIED;
@@ -4768,8 +4769,10 @@ void Commander::estimator_check(bool *status_changed)
                         }
 
                         // use local position message to determine validity
+                        //bool test_valid =
                         check_posvel_validity(lpos.xy_valid, lpos.eph, _eph_threshold_adj, lpos.timestamp, &_last_lpos_fail_time_us,
                                               &_lpos_probation_time_us, &status_flags.condition_local_position_valid, status_changed);
+                        //mavlink_log_info(&mavlink_log_pub, "estimator check for local position is %d", test_valid);
                         check_posvel_validity(lpos.v_xy_valid, lpos.evh, _param_com_vel_fs_evh.get(), lpos.timestamp, &_last_lvel_fail_time_us,
                                               &_lvel_probation_time_us, &status_flags.condition_local_velocity_valid, status_changed);
                 }

@@ -2240,7 +2240,7 @@ Mavlink::task_main(int argc, char *argv[])
 		perf_count(_loop_interval_perf);
 		perf_begin(_loop_perf);
 
-        orb_check(_dg_mission_sub, &_dg_mission_updated);
+        //orb_check(_dg_mission_sub, &_dg_mission_updated);
         if (_dg_mission_updated){
             mavlink_message_t msg_empty ={};
             orb_copy(ORB_ID(dg_mission), _dg_mission_sub, &dg_manager.dg_mission);

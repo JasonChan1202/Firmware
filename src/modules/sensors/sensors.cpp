@@ -528,6 +528,7 @@ Sensors::adc_poll()
 					if (!_dg_voltage_battery_initialized) {
 						_dg_voltage_battery_filtered_v = dg_voltage_battery;
                         //_dg_voltage_battery_warning = dg_voltage_s::DG_VOLTAGE_BATTERY_WARNING_FAILD;
+                        //DG: This is for planes without power outside, if not, uncomment it !!!!!!!!!
 
 					} else {
 						const float dg_filtered_battery_next = _dg_voltage_battery_filtered_v * 0.99f + dg_voltage_battery * 0.01f;

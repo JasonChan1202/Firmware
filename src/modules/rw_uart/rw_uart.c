@@ -102,8 +102,8 @@ int set_rw_uart_baudrate(const int fd, unsigned int baud)
 
 int rw_uart_init (void)
 {
-       //char *uart_name = "/dev/ttyS3";
-       char *uart_name = "/dev/ttyS1";
+       char *uart_name = "/dev/ttyS3";
+       //char *uart_name = "/dev/ttyS1";
        int serial_fd = open(uart_name, O_RDWR | O_NONBLOCK | O_NOCTTY);
        //int serial_fd = open(uart_name, O_RDWR | O_NOCTTY);
         // 选项 O_NOCTTY 表示不能把本串口当成控制终端，否则用户的键盘输入信息将影响程序的执行
@@ -250,29 +250,29 @@ void wp_data_init(void)
     wp_data.speed_pre = (uint8_t)(paramf*10);
 }
 
-int read_to_buff(uint8_t *buffer, int start, int end)
-{
-    uint8_t data = 0;
-    int error_count = 0;
-    int  i = start;
-    for (; i < end;)
-    {
-        if (read(uart_read,&data,1) > 0){
-            buffer[i] = data;
-            //printf("buffer[%d] is %x\n", i ,data);
-            i++;
-            error_count = 0;
-        }
-        else{
-            error_count++;
-        }
-        if (error_count > 10) {
-            //printf("buffer i is %d\n", i);
-            return (i - start);
-        }
-    }
-    return (i - start);
-}
+//int read_to_buff(uint8_t *buffer, int start, int end)
+//{
+//    uint8_t data = 0;
+//    int error_count = 0;
+//    int  i = start;
+//    for (; i < end;)
+//    {
+//        if (read(uart_read,&data,1) > 0){
+//            buffer[i] = data;
+//            //printf("buffer[%d] is %x\n", i ,data);
+//            i++;
+//            error_count = 0;
+//        }
+//        else{
+//            error_count++;
+//        }
+//        if (error_count > 10) {
+//            //printf("buffer i is %d\n", i);
+//            return (i - start);
+//        }
+//    }
+//    return (i - start);
+//}
 
 
 int rw_uart_main(int argc, char *argv[])
@@ -349,12 +349,19 @@ static void *receive_loop(void *arg)
           if (nread < 0) nread =0;
 //           pthread_mutex_lock(&mutex);
           for ( read_finish = 0; read_finish < (nread + remain); ) {
-               if ((nread + remain - read_finish) < 30) break;
                if (buffer[read_finish] == '$'){
-                    find_type_finish = find_r_type(&buffer[read_finish], msg_data, &msg_pd, msg_hd);
+                   if ((nread + remain - read_finish) < 5) {
+                       error_count++;
+                       break;
+                   }
+                    find_type_finish = find_r_type(&buffer[read_finish], nread + remain - read_finish,
+                                                               msg_data, &msg_pd, msg_hd);
                     if (find_type_finish < 0) {
                         error_count ++;
                         break;
+                    }
+                    else if (find_type_finish == 0){
+                        read_finish ++;
                     }
                     else {
                         read_finish += find_type_finish;
@@ -365,6 +372,7 @@ static void *receive_loop(void *arg)
                    read_finish++;
                }
             }
+
             remain = nread + remain - read_finish;
             uint8_t buffer_move[300] = {};
             memcpy(buffer_move, &buffer[read_finish], (size_t)remain);

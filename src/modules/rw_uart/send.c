@@ -69,6 +69,9 @@ uint8_t get_control_status(uint8_t nav_state){
         case 5://NAVIGATION_STATE_AUTO_RTL:
             return 11;
             break;
+        case 19:
+            return 13;
+            break;
         default:
             return 0xff;
             break;
@@ -150,8 +153,8 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
 
     stp->local_z_sp = -(int16_t)((stp_data.local_position_sp_data.z - stp_data.home_position_data.z)* 10.0) ;
 
-    float_t distance = (float_t) sqrtl((stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z)
-                                                  + (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
+    float_t distance = (float_t) sqrtl(//(stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z) +
+                                                  (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
                                                   + (stp_data.local_position_data.y - stp_data.home_position_data.y)* (stp_data.local_position_data.y -  stp_data.home_position_data.y));
     stp->distance_high8 =  (uint8_t)(distance/256.0);
     stp->distance_low8 = (uint8_t)(distance);

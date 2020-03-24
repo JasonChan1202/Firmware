@@ -53,6 +53,7 @@
 #include <uORB/topics/subsystem_info.h>
 #include <uORB/topics/dg_voltage.h>
 #include <uORB/topics/position_setpoint.h>
+//#include <uORB/topics/follow_dg.h>
 
 #define WP_DATA_NUM_MAX (uint16_t) 20
 
@@ -372,6 +373,7 @@ typedef struct {
     orb_advert_t follow_target_pd;
     orb_advert_t dg_vehicle_status_pd;
     orb_advert_t dg_mission_pd;
+    //orb_advert_t follow_dg_pd;
 }MSG_orb_pub;
 
 typedef struct {
@@ -469,7 +471,7 @@ extern Waypoint_saved wp_data;
 
 extern int uart_read;
 
-extern int read_to_buff(uint8_t *buffer, int start, int end);
+//extern int read_to_buff(uint8_t *buffer, int start, int end);
 
 extern void stp_pack (STP *stp, MSG_orb_data stp_data);
 
@@ -489,7 +491,7 @@ extern uint16_t check_crc(const uint8_t *buffer, uint8_t buflen);
 
 extern void msg_pack_send(MSG_orb_data msg_data, MSG_orb_pub *msg_pd);
 
-extern int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data, MSG_orb_pub *msg_pd,
+extern int find_r_type(const uint8_t *buffer, const int data_len, const MSG_orb_data msg_data, MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd);
 
 extern void msg_param_saved_get(MSG_param_hd msg_hd);
