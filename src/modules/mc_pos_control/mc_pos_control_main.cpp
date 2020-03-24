@@ -486,28 +486,28 @@ MulticopterPositionControl::set_vehicle_states(const float &vel_sp_z)
 
 	if (_param_mpc_alt_mode.get() && _local_pos.dist_bottom_valid && PX4_ISFINITE(_local_pos.dist_bottom_rate)) {
 		// terrain following
-		_states.velocity(2) = -_local_pos.dist_bottom_rate;
-		_states.acceleration(2) = _vel_z_deriv.update(-_states.velocity(2));
+        _states.velocity(2) = -_local_pos.dist_bottom_rate;
+        _states.acceleration(2) = _vel_z_deriv.update(-_states.velocity(2));
 
-	} else if (PX4_ISFINITE(_local_pos.vz)) {
+    } else if (PX4_ISFINITE(_local_pos.vz)) {
 
-		_states.velocity(2) = _local_pos.vz;
+        _states.velocity(2) = _local_pos.vz;
 
-		if (PX4_ISFINITE(vel_sp_z) && fabsf(vel_sp_z) > FLT_EPSILON && PX4_ISFINITE(_local_pos.z_deriv)) {
-			// A change in velocity is demanded. Set velocity to the derivative of position
-			// because it has less bias but blend it in across the landing speed range
-			float weighting = fminf(fabsf(vel_sp_z) / _param_mpc_land_speed.get(), 1.0f);
-			_states.velocity(2) = _local_pos.z_deriv * weighting + _local_pos.vz * (1.0f - weighting);
-		}
+        if (PX4_ISFINITE(vel_sp_z) && fabsf(vel_sp_z) > FLT_EPSILON && PX4_ISFINITE(_local_pos.z_deriv)) {
+            // A change in velocity is demanded. Set velocity to the derivative of position
+            // because it has less bias but blend it in across the landing speed range
+            float weighting = fminf(fabsf(vel_sp_z) / _param_mpc_land_speed.get(), 1.0f);
+            _states.velocity(2) = _local_pos.z_deriv * weighting + _local_pos.vz * (1.0f - weighting);
+        }
 
-		_states.acceleration(2) = _vel_z_deriv.update(-_states.velocity(2));
+        _states.acceleration(2) = _vel_z_deriv.update(-_states.velocity(2));
 
-	} else {
-		_states.velocity(2) = _states.acceleration(2) = NAN;
-		// since no valid velocity, update derivate with 0
-		_vel_z_deriv.update(0.0f);
+    } else {
+        _states.velocity(2) = _states.acceleration(2) = NAN;
+        // since no valid velocity, update derivate with 0
+        _vel_z_deriv.update(0.0f);
 
-	}
+    }
 
 }
 
@@ -828,23 +828,48 @@ MulticopterPositionControl::start_flight_task()
 	}
 
 	// Auto-follow me
-	if (_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_AUTO_FOLLOW_TARGET) {
-		should_disable_task = false;
-		int error = _flight_tasks.switchTask(FlightTaskIndex::AutoFollowMe);
+    if (_vehicle_status.nav_state == vehicle_status_s::NAVIGATION_STATE_AUTO_FOLLOW_TARGET) {
+        should_disable_task = false;
+        int error = _flight_tasks.switchTask(FlightTaskIndex::AutoFollowMe);
 
-		if (error != 0) {
-			if (prev_failure_count == 0) {
-				PX4_WARN("Follow-Me activation failed with error: %s", _flight_tasks.errorToString(error));
-			}
-			task_failure = true;
-			_task_failure_count++;
+        if (error != 0) {
+            if (prev_failure_count == 0) {
+                PX4_WARN("Follow-Me activation failed with error: %s", _flight_tasks.errorToString(error));
+            }
+            task_failure = true;
+            _task_failure_count++;
 
-		} else {
-			// we want to be in this mode, reset the failure count
-			_task_failure_count = 0;
-		}
+        } else {
+            // we want to be in this mode, reset the failure count
+            _task_failure_count = 0;
+        }
 
-	} else if (_control_mode.flag_control_auto_enabled) {
+//        // Auto related maneuvers
+//        should_disable_task = false;
+//        int error = 0;
+//        switch (_param_mpc_auto_mode.get()) {
+//        case 1:
+//            error =  _flight_tasks.switchTask(FlightTaskIndex::AutoLineSmoothVel);
+//            break;
+
+//        default:
+//            error =  _flight_tasks.switchTask(FlightTaskIndex::AutoLine);
+//            break;
+//        }
+
+//        if (error != 0) {
+//            if (prev_failure_count == 0) {
+//                PX4_WARN("Auto activation failed with error: %s", _flight_tasks.errorToString(error));
+//            }
+//            task_failure = true;
+//            _task_failure_count++;
+
+//        } else {
+//            // we want to be in this mode, reset the failure count
+//            _task_failure_count = 0;
+//        }
+
+    } else if (_control_mode.flag_control_auto_enabled) {
 		// Auto related maneuvers
 		should_disable_task = false;
 		int error = 0;

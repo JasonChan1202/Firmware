@@ -631,6 +631,8 @@ void Logger::add_default_topics()
 	//add_topic("ekf_gps_drift");
 	add_topic("esc_status", 250);
 	add_topic("estimator_status", 200);
+    add_topic("follow_target", 200);
+    add_topic("follow_dg", 200);
 	add_topic("home_position");
 	add_topic("input_rc", 200);
     add_topic("manual_control_setpoint", 200); //200

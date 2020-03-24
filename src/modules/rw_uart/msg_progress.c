@@ -426,6 +426,26 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             //response
             docap_pack_send(1);
             break;
+        case WIFI_COMM_FOLLOW_DG:
+            if (msg_data.local_position_data.xy_global && msg_data.local_position_data.z_global){
+                if (buffer[8] == 1)
+                set_command_param(msg_pd, 176, 189, 4, 8, 0, 0, 0, 0);
+                else
+                set_command_param(msg_pd, 176, 189, 4, 3, 0, 0, 0, 0);
+
+//                struct follow_dg_s follow_msg ={};
+//                follow_msg.enable = (buffer[8] == 1) ? true :false;
+//                follow_msg.timestamp = hrt_absolute_time();
+//                if (msg_pd->follow_dg_pd != NULL) {
+//                    orb_publish(ORB_ID(follow_dg), msg_pd->follow_dg_pd, &follow_msg);
+//                    //printf("Passing 2_1\n");
+//                } else {
+//                    msg_pd->follow_dg_pd = orb_advertise(ORB_ID(follow_dg), &follow_msg);
+//                    //printf("Passing 2_2\n");
+//                }
+                printf("msg has send to follow_dg\n");
+            }
+            break;
         case WIFI_COMM_POS_SAVE:
             lat_save = msg_data.global_position_data.lat;
             lon_save = msg_data.global_position_data.lon;
@@ -607,7 +627,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
     }
 }
 
-int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub *msg_pd,
+int find_r_type(const uint8_t *buffer, const int data_len,const MSG_orb_data msg_data,  MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd)
 {
     MSG_type msg_type;
@@ -617,11 +637,11 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
     char *name = "$WIFI";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        //printf("Passing WIFI\n");
+        printf("Passing WIFI\n");
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
         {
-
+            if (data_len < 30) return -1;
             msg_type.name =MSG_NAME_WIFI;
             msg_type.command = buffer[5];
 
@@ -631,9 +651,10 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
             {
                 //printf("Passing check\n");
                 msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
-                return 30;
+                //return 30;
             }
-            else return -1;
+            //else return 0;
+            return 30;
         }
 
     }
@@ -646,6 +667,7 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //nread +=read_to_buff(buffer, 5, 6);
         //if (nread < 1) return nread;
         buflen = buffer[5];
+        if (data_len < buflen) return -1;
         //printf("buffer len is %d\n", buflen);
         //nread +=read_to_buff(buffer, 6, buflen);
         //if (nread == (buflen -5))
@@ -674,9 +696,10 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
                 else {
                     msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
                 }
-                return buflen;
+                //return buflen;
             }
-            else return -1;
+            //else return 0;
+            return buflen;
         }
     }
 
@@ -686,6 +709,7 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //printf("Passing IWFI\n");
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
+        if (data_len<30) return -1;
          {
             msg_type.name =MSG_NAME_IWFI;
             //if(check_command_repeat(buffer, msg_type) && buffer[29] == calculate_sum_check(buffer, 30))
@@ -693,9 +717,10 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
              {
                  //printf("Passing check\n");
                  msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
-                 return 30;
+                 //return 30;
              }
-            else return -1;
+            //else return 0;
+            return 30;
          }
     }
 
@@ -705,15 +730,17 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //printf("Passing HFMR\n");
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
+        if (data_len<30) return -1;
         {
             msg_type.name =MSG_NAME_HFMR;
             if(buffer[29] == calculate_sum_check(buffer, 30))
              //if (buffer[29] == 0x3f)
              {
                 param_reset_all();
-                return 30;
+                //return 30;
              }
-            else return -1;
+            //else return 0;
+            return 30;
         }
     }
 
@@ -726,6 +753,7 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //if (nread < 2) return nread;
         //if (!read_to_buff(buffer, 5, 7)) return;
         buflen = (uint16_t)buffer[5] + ((uint16_t)buffer[6]<<8);
+        if (data_len < buflen) return -1;
         //printf("Buflen is %d\n", buflen);
         //nread +=read_to_buff(buffer, 7, buflen);
         //if (nread == (buflen - 5))
@@ -734,15 +762,16 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
             msg_type.name =MSG_NAME_EXYF;
             msg_type.command = buffer[7];
             uint16_t  crc_receive = (uint16_t)buffer[buflen -2] + ((uint16_t)buffer[buflen -1] << 8);
-            if (check_command_repeat(buffer, msg_type) && crc_receive == check_crc(buffer, buflen))
-            //if (check_command_repeat(buffer, msg_type) && buffer[buflen -1] == 0x3f)
+            //if (check_command_repeat(buffer, msg_type) && crc_receive == check_crc(buffer, buflen))
+            if (check_command_repeat(buffer, msg_type) && (crc_receive == check_crc(buffer, buflen) || buffer[buflen -1] == 0x3f))
              {
                 //printf("Check passed\n");
                 msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
                 exyf_response_pack(msg_type, msg_hd);
-                return buflen;
+                //return buflen;
              }
-            else return -1;
+            //else return 0;
+            return buflen;
         }
     }
 
@@ -755,6 +784,7 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //if (nread < 2) return nread;
         //if (!read_to_buff(buffer, 5, 7)) return;
         buflen = (uint16_t)buffer[5] + ((uint16_t)buffer[6]<<8);
+        if (data_len < buflen) return -1;
         //nread +=read_to_buff(buffer, 7, buflen);
         //if (nread == (buflen - 5))
         //if (read_to_buff(buffer, 7, buflen))
@@ -766,11 +796,13 @@ int find_r_type(const uint8_t *buffer, const MSG_orb_data msg_data,  MSG_orb_pub
         //if (check_command_repeat(buffer, msg_type) && buffer[buflen + 8] == 0x3f)
          {
             msg_orb_param_pro(buffer ,msg_pd, msg_data, msg_hd, msg_type);
-            return buflen;
+            //return buflen;
          }
-        else return -1;
+        //else return 0;
+        return buflen;
         }
     }
-    return -1;
+
+    return 0;
 }
 
