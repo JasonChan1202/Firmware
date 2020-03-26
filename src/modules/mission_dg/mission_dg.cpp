@@ -106,7 +106,7 @@ MissionDgModule *MissionDgModule::instantiate(int argc, char *argv[])
 int
 MissionDgModule::task_spawn(int argc, char *argv[])
 {
-     _task_id = px4_task_spawn_cmd("follow_dg",
+     _task_id = px4_task_spawn_cmd("mission_dg",
                                     SCHED_DEFAULT,
                                     SCHED_PRIORITY_DEFAULT,
                                     3000,
